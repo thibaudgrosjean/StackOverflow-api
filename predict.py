@@ -18,52 +18,39 @@ class Predictor():
 
     def __init__(self):
 
-        self.input_transformer = load('./tfid_vectorizer.joblib')
+        self.input_transformer_0 = load('./tfid_vectorizer.joblib')
+        self.input_transformer_1 = load('./truncated_svd.joblib')
         self.estimator = load('./model.joblib')
         self.output_transformer = load('./multi_label_binarizer.joblib')
         self.lemmatizer = WordNetLemmatizer()
-        self.pos_filters = ['NN', 'NNP', 'NNS', 'NNPS', 'VB']
+        self.pos_filter = ['NN', 'NNP', 'NNS', 'NNPS', 'VB']
         self.stop_words = stopwords.words('english')
 
-    def extract_body(self, text):
+    def remove_code(self, body):
 
         # Remove the code citations, which is the text between the <code> tags
-        no_code = re.sub('<code>[^>]+</code>', '', text)
-        # Remove all the HTML tags
-        text = bs(no_code, features='html.parser').get_text()
-        # Convert the text to lower
-        text = text.lower()
-        # Tokenize the text
-        tokens = word_tokenize(text, language='english')
-        # tokens = list(set(tokens).difference(set(stopwords.words('english')))) # we remove the stopwords
-        # Remove the stop words
-        tokens = [token for token in tokens if token not in self.stop_words]
-        # Generate the pos tags
-        tags = nltk.pos_tag(tokens)
-        # Select the target pos tags
-        tokens = [token for token, pos in tags if pos in self.pos_filters]
-        # Lemmatize the result
-        tokens = [self.lemmatizer.lemmatize(token) for token in tokens]
-        # Format the result
-        result = ','.join(tokens)
+        no_code = re.sub('<code>[^>]+</code>', '', body)
+        # Parse with BeautifulSoup and keep the text only
+        result = bs(no_code).get_text()
 
         return result
 
-    def extract_title(self, text):
+    def process_text(self, text):
 
         # Convert the text to lower
         text = text.lower()
         # Tokenize the text
         tokens = word_tokenize(text, language='english')
-        # tokens = list(set(tokens).difference(set(stopwords.words('english')))) # we remove the stopwords
-        # Remove the stop words
-        tokens = [token for token in tokens if token not in self.stop_words]
         # Generate the pos tags
         tags = nltk.pos_tag(tokens)
         # Select the target pos tags
-        tokens = [token.replace('?', '') for token, pos in tags if pos in self.pos_filters]
-        # Lemmatize the result
-        tokens = [self.lemmatizer.lemmatize(token) for token in tokens]
+        tokens = [token.replace('?', '') for token, pos in tags if pos in self.pos_filter]
+        # Initialize the lemmatizer
+        lemmatizer = WordNetLemmatizer()
+        # Lemmatize the tokens
+        tokens = [lemmatizer.lemmatize(token) for token in tokens]
+        # Remove the stop words
+        tokens = [token for token in tokens if token not in stopwords.words('english')]
         # Format the result
         result = ','.join(tokens)
 
@@ -71,8 +58,9 @@ class Predictor():
 
     def process_input(self, data_title, data_body):
 
-        title_processed = self.extract_title(data_title)
-        body_processed = self.extract_body(data_body)
+        title_processed = self.process_text(data_title)
+        body_processed = self.remove_code(data_body)
+        body_processed = self.process_text(body_processed)
         input_data = title_processed + body_processed
 
         return input_data
@@ -93,7 +81,8 @@ class Predictor():
     def predict(self, data_title, data_body):
 
         input_data = self.process_input(data_title, data_body)
-        input_transformed = self.input_transformer.transform([input_data])
+        input_transformed = self.input_transformer_0.transform([input_data])
+        input_transformed = self.input_transformer_1.transform(input_transformed)
         output_raw = self.estimator.predict_proba(input_transformed)
         output_filtered = self.get_firsts(output_raw, n_first=5)
         output_transformed = self.output_transformer.inverse_transform(output_filtered)
