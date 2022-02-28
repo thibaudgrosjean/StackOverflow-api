@@ -3,7 +3,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from predict import Predictor
-import nltk
 
 app = FastAPI()
 predictor = Predictor()

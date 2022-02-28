@@ -1,3 +1,4 @@
+gunicorn
 nltk==3.7
 anyio==3.5.0
 appnope==0.1.2
